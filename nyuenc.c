@@ -22,15 +22,14 @@ int main(int argc, char *argv[]) {
         } 
     }
 
-    // Run-length encoding for seperate files / chunks
     struct stat sb;
     int fd;
     unsigned char* addr;
     chunk** results = (chunk **) malloc(sizeof(chunk *) * (1024 * 1024 / 4));
     if (num_threads == -1) {
-        // Sequential RLE
+        // Sequential run-length encoding
         for (int i = 0; i < argc - 1; i++){
-            // Open file, get size, map address
+            // Open the file, get its size, and map its address
             fd = open(argv[i + 1], O_RDONLY);
             stat(argv[i + 1], &sb);
             addr = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -44,18 +43,18 @@ int main(int argc, char *argv[]) {
         }
     }
     else {
-        // Parallel RLE
+        // Parallel run-length encoding
         threadpool_t *pool = create_pool(num_threads);
         pthread_mutex_lock(&(pool->lock));
 
         for (int i = 0; i < argc - 3; i++){
-            // Open file, get size, map address
+            // Open the file, get its size, and map its address
             fd = open(argv[i + 3], O_RDONLY);
             stat(argv[i + 3], &sb);
             addr = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-
+            
+            // Store the tasks
             for (int j = 0; j < sb.st_size; j += 4096){
-                // Run-length encoding
                 pool->task_queue[pool->queue_tail] = (chunk *) malloc(sizeof(chunk));
                 pool->task_queue[pool->queue_tail]->string = addr + j;
                 pool->task_queue[pool->queue_tail]->size = (sb.st_size - j < 4096) ? sb.st_size - j : 4096;
@@ -68,7 +67,7 @@ int main(int argc, char *argv[]) {
         pool->task_queue[pool->queue_tail] = NULL;
         pthread_cond_signal(&(pool->queue_not_empty));
 
-        // Create threads
+        // Create threads to do the tasks
         for (int i = 0; i < num_threads; i++)
         {
             pthread_create(&(pool->threads[i]), NULL, thread, (void *) pool);
@@ -80,7 +79,7 @@ int main(int argc, char *argv[]) {
             pthread_cond_wait(&(pool->queue_empty), &(pool->lock));
         }
 
-        // Store results
+        // Store the results
         results = pool->results;
 
         // Release the mutex
@@ -105,7 +104,7 @@ int main(int argc, char *argv[]) {
                 results[i + 1] -> string[1] += results[i] -> string[results[i] -> size - 1];
             }
             else {
-                // Write the different chars
+                // Write the last char if they are different
                 write(1, results[i] -> string + results[i] -> size - 2, 2);
             }
         }
